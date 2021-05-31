@@ -88,13 +88,13 @@ func (a *asset) KeyFormat() (*RenditionKeyFmt, error) {
 		return nil, err
 	}
 	// read key tokens
-	c.RenditionKeyTokens = make([]string, c.MaximumRenditionKeyTokenCount)
+	c.RenditionKeyTokens = make([]uint32, c.MaximumRenditionKeyTokenCount)
 	for i := uint32(0); i < c.MaximumRenditionKeyTokenCount; i++ {
-		t := RenditionAttributeType(0)
+		t := uint32(0)
 		if err := binary.Read(buf, binary.LittleEndian, &t); err != nil {
 			return nil, err
 		}
-		c.RenditionKeyTokens[i] = t.String()
+		c.RenditionKeyTokens[i] = t
 	}
 
 	return c, nil
@@ -110,7 +110,7 @@ func (a *asset) ExtendedMetadata() (*CarextendedMetadata, error) {
 
 func (a *asset) AppearanceKeys() (map[string]uint16, error) {
 	keys := map[string]uint16{}
-	a.bom.ReadTree("APPEARANCEKEYS", func(k, d []byte) error {
+	if err := a.bom.ReadTree("APPEARANCEKEYS", func(k, d []byte) error {
 		name := string(k)
 		value := uint16(0)
 		if err := binary.Read(bytes.NewBuffer(d), binary.BigEndian, &value); err != nil {
@@ -118,6 +118,38 @@ func (a *asset) AppearanceKeys() (map[string]uint16, error) {
 		}
 		keys[name] = value
 		return nil
-	})
+	}); err != nil {
+		return nil, err
+	}
 	return keys, nil
+}
+
+func (a *asset) FacetKeys() (map[string]map[string]uint16, error) {
+	data := map[string]map[string]uint16{}
+	if err := a.bom.ReadTree("FACETKEYS", func(k, d []byte) error {
+		attrs := map[string]uint16{}
+		name := string(k)
+		buf := bytes.NewBuffer(d)
+		t := &Renditionkeytoken{}
+		if err := binary.Read(buf, binary.LittleEndian, &t.CursorHotSpot); err != nil {
+			return err
+		}
+		if err := binary.Read(buf, binary.LittleEndian, &t.NumberOfAttributes); err != nil {
+			return err
+		}
+		t.Attributes = make([]RenditionAttribute, t.NumberOfAttributes)
+		for i := uint16(0); i < t.NumberOfAttributes; i++ {
+			a := RenditionAttribute{}
+			if err := binary.Read(buf, binary.LittleEndian, &a); err != nil {
+				return err
+			}
+			t.Attributes[i] = a
+			attrs[RenditionAttributeType(a.Name).String()] = a.Value
+		}
+		data[name] = attrs
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return data, nil
 }

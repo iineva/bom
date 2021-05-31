@@ -15,6 +15,9 @@ type BomParser interface {
 	// parse bom headers
 	Parse() error
 
+	// read all block names
+	BlockNames() []string
+
 	// read named block
 	ReadBlock(name string) ([]byte, error)
 
@@ -121,6 +124,14 @@ func (b *bom) ReadBlock(name string) ([]byte, error) {
 	return nil, ErrNameNotMatch
 }
 
+func (b *bom) BlockNames() []string {
+	names := make([]string, len(b.vars))
+	for i, v := range b.vars {
+		names[i] = v.Name
+	}
+	return names
+}
+
 func (b *bom) readBlock(index uint32) (*bytes.Buffer, error) {
 	p := b.blockTable.BlockPointers[index]
 	if _, err := b.r.Seek(int64(p.Address), 0); err != nil {
@@ -181,10 +192,12 @@ func (b *bom) ReadTree(name string, entry func(k []byte, d []byte) error) error 
 			if err != nil {
 				return err
 			}
+			// loop callback entry
 			if err := entry(kbuf.Bytes(), dbuf.Bytes()); err != nil {
 				return err
 			}
 		}
+		return nil
 	}
 
 	return ErrNameNotMatch

@@ -1,6 +1,7 @@
 package asset
 
 import (
+	"log"
 	"os"
 	"reflect"
 	"testing"
@@ -22,6 +23,7 @@ func TestAsset(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// name: 'CARHEADER'
 	c, err := b.CarHeader()
 	if err != nil {
 		t.Fatal(err)
@@ -45,6 +47,7 @@ func TestAsset(t *testing.T) {
 		}
 	}
 
+	// name: 'EXTENDED_METADATA'
 	if c, err := b.ExtendedMetadata(); err != nil {
 		t.Fatal(err)
 	} else {
@@ -59,6 +62,8 @@ func TestAsset(t *testing.T) {
 			t.Fail()
 		}
 	}
+
+	// name: 'KEYFORMAT'
 	if c, err := b.KeyFormat(); err != nil {
 		t.Fatal(err)
 	} else {
@@ -66,13 +71,14 @@ func TestAsset(t *testing.T) {
 			Tag:                           helper.NewString4("tmfk"),
 			Version:                       0,
 			MaximumRenditionKeyTokenCount: 7,
-			RenditionKeyTokens:            []string{"Scale", "Idiom", "Subtype", "Dimension 2", "Identifier", "Element", "Part"},
+			RenditionKeyTokens:            []uint32{12, 15, 16, 9, 17, 1, 2},
 		}
 		if !reflect.DeepEqual(c, tc) {
 			t.Fail()
 		}
 	}
 
+	// name: 'APPEARANCEKEYS'
 	if c, err := b.AppearanceKeys(); err != nil {
 		t.Fatal(err)
 	} else {
@@ -80,4 +86,18 @@ func TestAsset(t *testing.T) {
 			t.Fail()
 		}
 	}
+
+	// name: 'FACETKEYS'
+	if c, err := b.FacetKeys(); err != nil {
+		t.Fatal(err)
+	} else {
+		log.Print(c)
+	}
+
+	// TODO:
+	// name: 'BITMAPKEYS'
+
+	// TODO:
+	// name: 'RENDITIONS'
+
 }

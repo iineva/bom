@@ -53,7 +53,15 @@ type RenditionKeyFmt struct {
 	// uint32_t maximumRenditionKeyTokenCount;
 	MaximumRenditionKeyTokenCount uint32
 	// uint32_t renditionKeyTokens[];
-	RenditionKeyTokens []string // use GetNameOfAttributeType to string
+	RenditionKeyTokens []uint32
+}
+
+func (r *RenditionKeyFmt) Keys() []string {
+	l := make([]string, len(r.RenditionKeyTokens))
+	for i, v := range r.RenditionKeyTokens {
+		l[i] = RenditionAttributeType(v).String()
+	}
+	return l
 }
 
 // tag: 'FACETKEYS'

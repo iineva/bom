@@ -3,8 +3,8 @@ package bom
 import (
 	"bytes"
 	"io"
-	"log"
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -36,6 +36,12 @@ func TestParser(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	names := b.BlockNames()
+	tnames := []string{"CARHEADER", "RENDITIONS", "FACETKEYS", "APPEARANCEKEYS", "KEYFORMAT", "EXTENDED_METADATA", "BITMAPKEYS"}
+	if !reflect.DeepEqual(tnames, names) {
+		t.Fail()
+	}
+
 	for k, v := range testBlockMap {
 		d, err := b.ReadBlock(k)
 		if err != nil {
@@ -46,10 +52,15 @@ func TestParser(t *testing.T) {
 		}
 	}
 
+	keys := []string{}
+	tkeys := []string{"AppIcon", "test", "test2", "test3"}
 	if err := b.ReadTree("FACETKEYS", func(k, d []byte) error {
-		log.Printf("%v: %v", string(k), string(d))
+		keys = append(keys, string(k))
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(tkeys, keys) {
+		t.Fail()
 	}
 }
