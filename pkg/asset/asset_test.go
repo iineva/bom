@@ -1,7 +1,6 @@
 package asset
 
 import (
-	"log"
 	"os"
 	"reflect"
 	"testing"
@@ -11,6 +10,8 @@ import (
 
 func TestAsset(t *testing.T) {
 
+	// const fileName = "../bom/test_data/YouTube.car"
+	// const fileName = "../bom/test_data/Instagram.car"
 	const fileName = "../bom/test_data/Assets.car"
 	f, err := os.Open(fileName)
 	if err != nil {
@@ -20,6 +21,11 @@ func TestAsset(t *testing.T) {
 
 	b, err := NewWithReadSeeker(f)
 	if err != nil {
+		t.Fatal(err)
+	}
+
+	// name: 'RENDITIONS'
+	if err := b.Renditions(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -71,7 +77,7 @@ func TestAsset(t *testing.T) {
 			Tag:                           helper.NewString4("tmfk"),
 			Version:                       0,
 			MaximumRenditionKeyTokenCount: 7,
-			RenditionKeyTokens:            []uint32{12, 15, 16, 9, 17, 1, 2},
+			RenditionKeyTokens:            []RenditionAttributeType{12, 15, 16, 9, 17, 1, 2},
 		}
 		if !reflect.DeepEqual(c, tc) {
 			t.Fail()
@@ -91,13 +97,34 @@ func TestAsset(t *testing.T) {
 	if c, err := b.FacetKeys(); err != nil {
 		t.Fatal(err)
 	} else {
-		log.Print(c)
+		tc := map[string]map[RenditionAttributeType]uint16hex{
+			"AppIcon": {
+				kRenditionAttributeType_Element:    0x0055,
+				kRenditionAttributeType_Part:       0x00DC,
+				kRenditionAttributeType_Identifier: 0x1AC1,
+			},
+			"test": {
+				kRenditionAttributeType_Element:    0x0055,
+				kRenditionAttributeType_Part:       0x00B5,
+				kRenditionAttributeType_Identifier: 0x41A3,
+			},
+			"test2": {
+				kRenditionAttributeType_Element:    0x0055,
+				kRenditionAttributeType_Part:       0x00B5,
+				kRenditionAttributeType_Identifier: 0x684F,
+			},
+			"test3": {
+				kRenditionAttributeType_Element:    0x0055,
+				kRenditionAttributeType_Part:       0x00B5,
+				kRenditionAttributeType_Identifier: 0xF4B0,
+			},
+		}
+		if !reflect.DeepEqual(tc, c) {
+			t.Fail()
+		}
 	}
 
 	// TODO:
 	// name: 'BITMAPKEYS'
-
-	// TODO:
-	// name: 'RENDITIONS'
 
 }

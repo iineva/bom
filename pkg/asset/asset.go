@@ -1,6 +1,10 @@
 package asset
 
-import "github.com/iineva/bom/pkg/helper"
+import (
+	"fmt"
+
+	"github.com/iineva/bom/pkg/helper"
+)
 
 // tag: 'CTAR'
 type CarHeader struct {
@@ -53,13 +57,13 @@ type RenditionKeyFmt struct {
 	// uint32_t maximumRenditionKeyTokenCount;
 	MaximumRenditionKeyTokenCount uint32
 	// uint32_t renditionKeyTokens[];
-	RenditionKeyTokens []uint32
+	RenditionKeyTokens []RenditionAttributeType
 }
 
 func (r *RenditionKeyFmt) Keys() []string {
 	l := make([]string, len(r.RenditionKeyTokens))
 	for i, v := range r.RenditionKeyTokens {
-		l[i] = RenditionAttributeType(v).String()
+		l[i] = v.String()
 	}
 	return l
 }
@@ -76,5 +80,11 @@ type Renditionkeytoken struct {
 
 type RenditionAttribute struct {
 	Name  uint16
-	Value uint16
+	Value uint16hex
+}
+
+type uint16hex uint16
+
+func (u uint16hex) String() string {
+	return fmt.Sprintf("%04X", uint16(u))
 }

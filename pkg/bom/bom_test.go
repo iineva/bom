@@ -54,8 +54,8 @@ func TestParser(t *testing.T) {
 
 	keys := []string{}
 	tkeys := []string{"AppIcon", "test", "test2", "test3"}
-	if err := b.ReadTree("FACETKEYS", func(k, d []byte) error {
-		keys = append(keys, string(k))
+	if err := b.ReadTree("FACETKEYS", func(k *bytes.Buffer, d *bytes.Buffer) error {
+		keys = append(keys, k.String())
 		return nil
 	}); err != nil {
 		t.Fatal(err)

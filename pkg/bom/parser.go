@@ -22,7 +22,7 @@ type BomParser interface {
 	ReadBlock(name string) ([]byte, error)
 
 	// read named tree block
-	ReadTree(name string, entry func(k []byte, d []byte) error) error
+	ReadTree(name string, entry func(k *bytes.Buffer, d *bytes.Buffer) error) error
 }
 
 type bom struct {
@@ -102,7 +102,6 @@ func (b *bom) Parse() error {
 		vars.List[i] = v
 	}
 	b.vars = vars.List
-	// log.Printf("vars: %+v", vars)
 
 	return nil
 }
@@ -148,7 +147,7 @@ func (b *bom) readBlock(index uint32) (*bytes.Buffer, error) {
 }
 
 // Block: get tree block with name
-func (b *bom) ReadTree(name string, entry func(k []byte, d []byte) error) error {
+func (b *bom) ReadTree(name string, entry func(k *bytes.Buffer, d *bytes.Buffer) error) error {
 	for _, v := range b.vars {
 
 		if v.Name != name {
@@ -188,12 +187,12 @@ func (b *bom) ReadTree(name string, entry func(k []byte, d []byte) error) error 
 			if err != nil {
 				return err
 			}
-			dbuf, err := b.readBlock(pi.ValueIndex)
+			vbuf, err := b.readBlock(pi.ValueIndex)
 			if err != nil {
 				return err
 			}
 			// loop callback entry
-			if err := entry(kbuf.Bytes(), dbuf.Bytes()); err != nil {
+			if err := entry(kbuf, vbuf); err != nil {
 				return err
 			}
 		}
