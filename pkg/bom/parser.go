@@ -147,40 +147,37 @@ func (b *bom) readBlock(index uint32) (*bytes.Buffer, error) {
 }
 
 // Block: get tree block with name
-func (b *bom) ReadTree(name string, entry func(k *bytes.Buffer, d *bytes.Buffer) error) error {
+func (b *bom) ReadTree(name string, loop func(k *bytes.Buffer, d *bytes.Buffer) error) error {
 	for _, v := range b.vars {
 
 		if v.Name != name {
 			continue
 		}
 
-		p := b.blockTable.BlockPointers[v.Index]
-		if _, err := b.r.Seek(int64(p.Address), 0); err != nil {
+		entryBuf, err := b.readBlock(v.Index)
+		if err != nil {
+			return err
+		}
+		entry := TreeEntry{}
+		if err := binary.Read(entryBuf, binary.BigEndian, &entry); err != nil {
 			return err
 		}
 
-		if p.Length == 0 {
-			return ErrBlockLengthZero
-		}
-
-		tree := TreeEntry{}
-		binary.Read(b.r, binary.BigEndian, &tree)
-
-		buf, err := b.readBlock(tree.Index)
+		buf, err := b.readBlock(entry.Index)
 		if err != nil {
 			return err
 		}
 
-		ps := &Tree{}
-		binary.Read(buf, binary.BigEndian, &ps.IsLeaf)
-		binary.Read(buf, binary.BigEndian, &ps.Count)
-		binary.Read(buf, binary.BigEndian, &ps.Forward)
-		binary.Read(buf, binary.BigEndian, &ps.Backward)
-		ps.List = make([]TreeIndex, ps.Count)
-		for i := uint16(0); i < ps.Count; i++ {
+		tree := &Tree{}
+		binary.Read(buf, binary.BigEndian, &tree.IsLeaf)
+		binary.Read(buf, binary.BigEndian, &tree.Count)
+		binary.Read(buf, binary.BigEndian, &tree.Forward)
+		binary.Read(buf, binary.BigEndian, &tree.Backward)
+		tree.List = make([]TreeIndex, tree.Count)
+		for i := uint16(0); i < tree.Count; i++ {
 			pi := TreeIndex{}
 			binary.Read(buf, binary.BigEndian, &pi)
-			ps.List[i] = pi
+			tree.List[i] = pi
 
 			// get key and data
 			kbuf, err := b.readBlock(pi.KeyIndex)
@@ -192,7 +189,7 @@ func (b *bom) ReadTree(name string, entry func(k *bytes.Buffer, d *bytes.Buffer)
 				return err
 			}
 			// loop callback entry
-			if err := entry(kbuf, vbuf); err != nil {
+			if err := loop(kbuf, vbuf); err != nil {
 				return err
 			}
 		}
