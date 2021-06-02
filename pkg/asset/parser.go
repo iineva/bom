@@ -227,11 +227,14 @@ func (a *asset) Renditions(loop func(cb *RenditionCallback) (stop bool)) error {
 
 		log.Printf("%s: %s: %s attrs: %+v TVL: %+v %v", c.Tag.String(), c.PixelFormat.String(), c.Csimetadata.Name.String(), attrs, c, len(tmp))
 		// string value reverse
-		switch strings.TrimSpace(string(helper.Reverse(c.PixelFormat[:]))) {
+		format := strings.TrimSpace(string(helper.Reverse(c.PixelFormat[:])))
+		switch format {
 		case "DATA":
 			// TODO:
+			log.Print("TODO: handle DATA")
 		case "JPEG", "HEIF":
 			// TODO:
+			log.Print("TODO: handle JPEG")
 		case "ARGB", "GA8", "RGB5", "RGBW", "GA16":
 			// TODO:
 			cb := &RenditionCallback{
@@ -240,7 +243,7 @@ func (a *asset) Renditions(loop func(cb *RenditionCallback) (stop bool)) error {
 				Name:  c.Csimetadata.Name.String(),
 			}
 
-			img, err := a.decodeImage(d, c)
+			img, err := a.decodeImage(format, d, c)
 			if err != nil {
 				cb.Err = err
 				stop := loop(cb)

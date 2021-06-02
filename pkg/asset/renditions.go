@@ -229,6 +229,35 @@ const (
 	kRenditionCompressionType_deepmap_2     = RenditionCompressionType(11)
 )
 
+func (t RenditionCompressionType) String() string {
+	switch t {
+	case kRenditionCompressionType_uncompressed:
+		return "uncompressed"
+	case kRenditionCompressionType_rle:
+		return "rle"
+	case kRenditionCompressionType_zip:
+		return "zip"
+	case kRenditionCompressionType_lzvn:
+		return "lzvn"
+	case kRenditionCompressionType_lzfse:
+		return "lzfse"
+	case kRenditionCompressionType_jpeg_lzfse:
+		return "jpeg-lzfse"
+	case kRenditionCompressionType_blurred:
+		return "blurred"
+	case kRenditionCompressionType_astc:
+		return "astc"
+	case kRenditionCompressionType_palette_img:
+		return "palette-img"
+	case kRenditionCompressionType_deepmap_lzfse:
+		return "deepmap-lzfse"
+	case kRenditionCompressionType_deepmap_2:
+		return "deepmap-2"
+	default:
+		return fmt.Sprintf("Unknown type: %v", int(t))
+	}
+}
+
 type kCoreThemeIdiom uint32
 
 const (

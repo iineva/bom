@@ -3,11 +3,11 @@ package asset
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"io"
 	"io/ioutil"
-	"log"
 
 	"github.com/blacktop/go-lzfse"
 )
@@ -31,8 +31,36 @@ func (p *BGRA) SubImage(r image.Rectangle) image.Image {
 	return &BGRA{*c}
 }
 
-// "ARGB", "GA8", "RGB5", "RGBW", "GA16"
-func (a *asset) decodeImage(d io.Reader, c *csiheader) (image.Image, error) {
+// gray alpha 8 bit
+type GA8 struct {
+	Pix    []uint8
+	Stride int
+	Rect   image.Rectangle
+}
+
+func (p *GA8) ColorModel() color.Model { return color.RGBAModel }
+
+func (p *GA8) Bounds() image.Rectangle { return p.Rect }
+
+func (p *GA8) At(x, y int) color.Color {
+	return p.GA8At(x, y)
+}
+
+func (p *GA8) GA8At(x, y int) color.RGBA {
+	if !(image.Point{x, y}.In(p.Rect)) {
+		return color.RGBA{}
+	}
+	i := p.PixOffset(x, y)
+	s := p.Pix[i : i+2 : i+2] // Small cap improves performance, see https://golang.org/issue/27857
+	return color.RGBA{s[0], s[0], s[0], s[1]}
+}
+
+func (p *GA8) PixOffset(x, y int) int {
+	return (y-p.Rect.Min.Y)*p.Stride + (x-p.Rect.Min.X)*2
+}
+
+// format: "ARGB", "GA8", "RGB5", "RGBW", "GA16"
+func (a *asset) decodeImage(format string, d io.Reader, c *csiheader) (image.Image, error) {
 	p := &CUIThemePixelRendition{}
 	if err := binary.Read(d, binary.LittleEndian, &p.Tag); err != nil {
 		return nil, err
@@ -44,42 +72,19 @@ func (a *asset) decodeImage(d io.Reader, c *csiheader) (image.Image, error) {
 		return nil, err
 	}
 
-	switch p.CompressionType {
-	case kRenditionCompressionType_lzfse:
-		return a.decode_lzfse(d, c, p)
-	case kRenditionCompressionType_deepmap_2:
-		// TODO
-	}
-
-	// /*
-	// migic := helper.String4{}
-	// if err := binary.Read(d, binary.LittleEndian, &migic); err != nil {
-	// 	return err
-	// }
-
-	// rawLen := uint32(0)
-	// if err := binary.Read(d, binary.LittleEndian, &rawLen); err != nil {
-	// 	return err
-	// }
-	// log.Printf("%+v %+v", v3, l)
-	// */
-
-	// l := d.Bytes()
-	// log.Printf("byte length: %v", len(l))
-	// }
-	log.Printf("%+v %+v", p, a)
-
-	return nil, errors.New("decoder not support")
-}
-
-func (a *asset) decode_lzfse(d io.Reader, c *csiheader, p *CUIThemePixelRendition) (image.Image, error) {
 	var rawData []byte
 	var err error
 
 	width := c.Width
 	height := c.Height
 
-	if p.Version != 3 {
+	// f := c.PixelFormat.String()
+	// n := c.Csimetadata.Name.String()
+	// log.Print(f, ",", n)
+
+	// decode header
+	switch p.Version {
+	case 0, 2:
 		if err := binary.Read(d, binary.LittleEndian, &p.RawDataLength); err != nil {
 			return nil, err
 		}
@@ -88,9 +93,9 @@ func (a *asset) decode_lzfse(d io.Reader, c *csiheader, p *CUIThemePixelRenditio
 			return nil, err
 		}
 		rawData = p.RawData
-	} else {
+	case 1, 3: // maybe version 2
 		// NOTE: unknow this bolck, skip
-		// TODO: handl this block
+		// TODO: handle this block
 		v3 := CUIThemePixelRenditionV3{}
 		if err := binary.Read(d, binary.LittleEndian, &v3); err != nil {
 			return nil, err
@@ -101,28 +106,69 @@ func (a *asset) decode_lzfse(d io.Reader, c *csiheader, p *CUIThemePixelRenditio
 		if err != nil {
 			return nil, err
 		}
+	default:
+		return nil, fmt.Errorf("unsupport version: %v", p.Version)
 	}
 
-	decoded := lzfse.DecodeBuffer(rawData)
-	rect := image.Rectangle{
-		Min: image.Point{0, 0},
-		Max: image.Point{
-			X: int(width) + 4, // I dont know why, but +4 will work correct
-			Y: int(height),
-		},
+	// upcompression raw data
+	switch p.CompressionType {
+	case kRenditionCompressionType_lzfse:
+		rawData = lzfse.DecodeBuffer(rawData)
+	case kRenditionCompressionType_uncompressed:
+		// NOTE: do nothing
+	// TODO
+	// case kRenditionCompressionType_deepmap_2:
+	default:
+		return nil, fmt.Errorf("unsupport compression type: %v", p.CompressionType)
 	}
-	bgra := &BGRA{image.RGBA{
-		Pix:    decoded,
-		Stride: rect.Dx() * 4,
-		Rect:   rect,
-	}}
-	// return bgra, nil
-	// befor return, strip +4 pix
-	return bgra.SubImage(image.Rectangle{
-		Min: image.Point{0, 0},
-		Max: image.Point{
-			X: int(width),
-			Y: int(height),
-		},
-	}), nil
+
+	offset := 0
+	switch format {
+	case "ARGB":
+		if v := len(rawData) - int(width*height*4); v != 0 {
+			offset = v / int(height*4)
+		}
+		if offset < 0 {
+			return nil, errors.New("error image content")
+		}
+		rect := image.Rectangle{
+			Min: image.Point{0, 0},
+			Max: image.Point{
+				X: int(width),
+				Y: int(height),
+			},
+		}
+		bgra := &BGRA{image.RGBA{
+			Pix:    rawData,
+			Stride: (rect.Dx() + offset) * 4,
+			Rect:   rect,
+		}}
+		return bgra, nil
+	case "GA8":
+
+		if v := len(rawData) - int(width*height*2); v != 0 {
+			offset = v / int(height*2)
+		}
+		if offset < 0 {
+			return nil, errors.New("error image content")
+		}
+
+		rect := image.Rectangle{
+			Min: image.Point{0, 0},
+			Max: image.Point{
+				X: int(width),
+				Y: int(height),
+			},
+		}
+		bgra := &GA8{
+			Pix:    rawData,
+			Stride: (rect.Dx() + offset) * 2,
+			Rect:   rect,
+		}
+		return bgra, nil
+	case "RGB5":
+	case "RGBW":
+	case "GA16":
+	}
+	return nil, fmt.Errorf("unsupport image format: %v", format)
 }

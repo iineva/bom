@@ -1,6 +1,8 @@
 package helper
 
-import "strings"
+import (
+	"bytes"
+)
 
 type String4 [4]byte
 
@@ -28,7 +30,8 @@ func NewString256(v string) (s String256) { copy(s[:], v); return }
 func (s String256) String() string        { return trim(s[:]) }
 
 func trim(s []byte) string {
-	return strings.TrimRight(string(s), string([]byte{0}))
+	return string(bytes.TrimRight(s, "\x00\x01"))
+	// return strings.TrimRight(string(s), string([]byte{0}))
 }
 
 func Reverse(s []byte) []byte {

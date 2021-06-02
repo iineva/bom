@@ -182,7 +182,7 @@ func (b *bom) ReadTree(name string, loop func(k io.Reader, d io.Reader) error) e
 			// get key and data
 			kbuf, err := b.blockReader(pi.KeyIndex)
 			if err != nil {
-				// why? not found i don't know, temporary handle
+				// in case of BITMAPKEYS, i don't know why not found, temporary handle
 				if err == ErrBlockNotFound {
 					p := make([]byte, 4)
 					binary.BigEndian.PutUint32(p, pi.KeyIndex)

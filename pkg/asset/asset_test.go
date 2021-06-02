@@ -13,10 +13,14 @@ import (
 
 func TestAsset(t *testing.T) {
 
-	// const fileName = "../bom/test_data/YouTube.car"
+	const fileName = "../bom/test_data/YouTube.car"
 	// const fileName = "../bom/test_data/Instagram.car"
-	const fileName = "../bom/test_data/Assets.car"
+	// const fileName = "../bom/test_data/Twitter.car"
+	// const fileName = "../bom/test_data/YouTubeMusic.car"
+	// const fileName = "../bom/test_data/Assets.car"
+
 	f, err := os.Open(fileName)
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,8 +40,12 @@ func TestAsset(t *testing.T) {
 	ri := 0
 	if err := b.Renditions(func(cb *RenditionCallback) (stop bool) {
 		if cb.Type == RenditionTypeImage && cb.Err == nil {
-			fileName := fmt.Sprintf("%v-%v", ri, cb.Name)
-			outf, _ := os.Create(fileName)
+			os.MkdirAll("output", 0755)
+			fileName := fmt.Sprintf("output/%v-%v.png", ri, cb.Name)
+			outf, err := os.Create(fileName)
+			if err != nil {
+				t.Fatal(err)
+			}
 			defer outf.Close()
 			if err := png.Encode(outf, cb.Image); err != nil {
 				log.Print(err)
@@ -49,6 +57,7 @@ func TestAsset(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	return
 
 	// name: 'CARHEADER'
 	c, err := b.CarHeader()
