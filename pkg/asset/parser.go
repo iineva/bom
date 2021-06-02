@@ -1,18 +1,14 @@
 package asset
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"image"
-	"image/color"
-	"image/png"
 	"io"
+	"io/ioutil"
 	"log"
-	"os"
 	"strings"
 
-	"github.com/blacktop/go-lzfse"
 	"github.com/iineva/bom/pkg/bom"
 	"github.com/iineva/bom/pkg/helper"
 )
@@ -50,24 +46,6 @@ func New(b bom.BomParser) *asset {
 	return &asset{bom: b}
 }
 
-type BGRA struct {
-	image.RGBA
-}
-
-func (p *BGRA) RGBAAt(x, y int) color.RGBA {
-	c := p.RGBA.RGBAAt(x, y)
-	return color.RGBA{R: c.B, G: c.G, B: c.R, A: c.A}
-}
-
-func (p *BGRA) At(x, y int) color.Color {
-	return p.RGBAAt(x, y)
-}
-
-func (p *BGRA) SubImage(r image.Rectangle) image.Image {
-	c := p.RGBA.SubImage(r).(*image.RGBA)
-	return &BGRA{*c}
-}
-
 func NewWithReadSeeker(r io.ReadSeeker) (*asset, error) {
 	b := bom.New(r)
 	if err := b.Parse(); err != nil {
@@ -82,7 +60,7 @@ func (a *asset) read(name string, order binary.ByteOrder, p interface{}) error {
 		return err
 	}
 
-	if err := binary.Read(bytes.NewBuffer(d), order, p); err != nil {
+	if err := binary.Read(d, order, p); err != nil {
 		return err
 	}
 
@@ -98,11 +76,10 @@ func (a *asset) CarHeader() (*CarHeader, error) {
 }
 
 func (a *asset) KeyFormat() (*RenditionKeyFmt, error) {
-	d, err := a.bom.ReadBlock("KEYFORMAT")
+	buf, err := a.bom.ReadBlock("KEYFORMAT")
 	if err != nil {
 		return nil, err
 	}
-	buf := bytes.NewBuffer(d)
 
 	c := &RenditionKeyFmt{}
 	if err := binary.Read(buf, binary.LittleEndian, &c.Tag); err != nil {
@@ -137,12 +114,16 @@ func (a *asset) ExtendedMetadata() (*CarextendedMetadata, error) {
 
 func (a *asset) AppearanceKeys() (map[string]uint16, error) {
 	keys := map[string]uint16{}
-	if err := a.bom.ReadTree("APPEARANCEKEYS", func(k *bytes.Buffer, d *bytes.Buffer) error {
+	if err := a.bom.ReadTree("APPEARANCEKEYS", func(k io.Reader, d io.Reader) error {
 		value := uint16(0)
 		if err := binary.Read(d, binary.BigEndian, &value); err != nil {
 			return err
 		}
-		keys[k.String()] = value
+		key, err := ioutil.ReadAll(k)
+		if err != nil {
+			return err
+		}
+		keys[string(key)] = value
 		return nil
 	}); err != nil {
 		return nil, err
@@ -150,11 +131,10 @@ func (a *asset) AppearanceKeys() (map[string]uint16, error) {
 	return keys, nil
 }
 
-func (a *asset) FacetKeys() (map[string]map[RenditionAttributeType]uint16hex, error) {
-	data := map[string]map[RenditionAttributeType]uint16hex{}
-	if err := a.bom.ReadTree("FACETKEYS", func(k *bytes.Buffer, d *bytes.Buffer) error {
+func (a *asset) FacetKeys() (map[string]RenditionAttrs, error) {
+	data := map[string]RenditionAttrs{}
+	if err := a.bom.ReadTree("FACETKEYS", func(k io.Reader, d io.Reader) error {
 		attrs := map[RenditionAttributeType]uint16hex{}
-		name := k.String()
 		t := &Renditionkeytoken{}
 		if err := binary.Read(d, binary.LittleEndian, &t.CursorHotSpot); err != nil {
 			return err
@@ -171,7 +151,11 @@ func (a *asset) FacetKeys() (map[string]map[RenditionAttributeType]uint16hex, er
 			t.Attributes[i] = a
 			attrs[RenditionAttributeType(a.Name)] = a.Value
 		}
-		data[name] = attrs
+		name, err := ioutil.ReadAll(k)
+		if err != nil {
+			return err
+		}
+		data[string(name)] = attrs
 		return nil
 	}); err != nil {
 		return nil, err
@@ -179,22 +163,59 @@ func (a *asset) FacetKeys() (map[string]map[RenditionAttributeType]uint16hex, er
 	return data, nil
 }
 
-func (a *asset) Renditions() error {
+func (a *asset) BitmapKeys() error {
+	if err := a.bom.ReadTree("BITMAPKEYS", func(k io.Reader, d io.Reader) error {
+		// TODO: handle bitmapKeys
+		kk, err := ioutil.ReadAll(k)
+		if err != nil {
+			return err
+		}
+		dd, err := ioutil.ReadAll(d)
+		if err != nil {
+			return err
+		}
+		log.Printf("%v: %v", kk, dd)
+		return nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+type RenditionAttrs map[RenditionAttributeType]uint16hex
+
+type RenditionType int
+
+const (
+	RenditionTypeImage = RenditionType(0)
+	RenditionTypeData  = RenditionType(1)
+	RenditionTypeColor = RenditionType(3)
+)
+
+type RenditionCallback struct {
+	Attrs RenditionAttrs
+	Type  RenditionType
+	Err   error
+	Image image.Image
+	Name  string
+}
+
+func (a *asset) Renditions(loop func(cb *RenditionCallback) (stop bool)) error {
 	kf, err := a.KeyFormat()
 	if err != nil {
 		return err
 	}
-	i := 0
-	if err := a.bom.ReadTree("RENDITIONS", func(k *bytes.Buffer, d *bytes.Buffer) error {
-		attrs := map[RenditionAttributeType]uint16hex{}
+
+	if err := a.bom.ReadTree("RENDITIONS", func(k io.Reader, d io.Reader) error {
+		attrs := RenditionAttrs{}
 		for i := 0; i < len(kf.RenditionKeyTokens); i++ {
 			v := uint16hex(0)
 			binary.Read(k, binary.LittleEndian, &v)
 			attrs[kf.RenditionKeyTokens[i]] = v
 		}
 
-		c := csiheader{}
-		if err := binary.Read(d, binary.LittleEndian, &c); err != nil {
+		c := &csiheader{}
+		if err := binary.Read(d, binary.LittleEndian, c); err != nil {
 			return err
 		}
 
@@ -211,107 +232,27 @@ func (a *asset) Renditions() error {
 			// TODO:
 		case "JPEG", "HEIF":
 			// TODO:
-		case "GA8", "RGB5", "RGBW", "GA16":
+		case "ARGB", "GA8", "RGB5", "RGBW", "GA16":
 			// TODO:
-
-		case "ARGB":
-			// TODO:
-			p := CUIThemePixelRendition{}
-			if err := binary.Read(d, binary.LittleEndian, &p.Tag); err != nil {
-				return err
-			}
-			if err := binary.Read(d, binary.LittleEndian, &p.Version); err != nil {
-				return err
-			}
-			if err := binary.Read(d, binary.LittleEndian, &p.CompressionType); err != nil {
-				return err
+			cb := &RenditionCallback{
+				Attrs: attrs,
+				Type:  RenditionTypeImage,
+				Name:  c.Csimetadata.Name.String(),
 			}
 
-			if p.CompressionType == kRenditionCompressionType_lzfse {
-
-				var rawData []byte
-
-				if p.Version != 3 {
-					if err := binary.Read(d, binary.LittleEndian, &p.RawDataLength); err != nil {
-						return err
-					}
-					p.RawData = make([]byte, p.RawDataLength)
-					if _, err := d.Read(p.RawData); err != nil {
-						return err
-					}
-					rawData = p.RawData
-				} else {
-					v3 := CUIThemePixelRenditionV3{}
-					if err := binary.Read(d, binary.LittleEndian, &v3); err != nil {
-						return err
-					}
-					rawData = d.Bytes()
-
-					count := 0
-					rawLen := uint32(0)
-					if err := binary.Read(bytes.NewBuffer(rawData[4:]), binary.LittleEndian, &rawLen); err != nil {
-						return err
-					}
-					for i, _ := range rawData {
-						if i >= 3 {
-							if rawData[i-1] == 120 && rawData[i-2] == 118 && rawData[i-3] == 98 {
-								count++
-								log.Print(count)
-							}
-						}
-					}
-
+			img, err := a.decodeImage(d, c)
+			if err != nil {
+				cb.Err = err
+				stop := loop(cb)
+				if stop {
+					return err
 				}
-
-				// buf, _ := seekbuf.Open(d, seekbuf.MemoryMode)
-				// defer buf.Close()
-				decoded := lzfse.DecodeBuffer(rawData)
-				fileName := fmt.Sprintf("%v-%v", i, c.Csimetadata.Name.String())
-				// fileName = strings.Trim(fileName, string([]byte{0}))
-				outf, _ := os.Create(fileName)
-				i++
-
-				rect := image.Rectangle{
-					Min: image.Point{0, 0},
-					Max: image.Point{X: int(c.Width) + 4, Y: int(c.Height)},
-				}
-				rgba := BGRA{image.RGBA{
-					Pix:    decoded,
-					Stride: rect.Dx() * 4,
-					Rect:   rect,
-				}}
-				// aaa := helper.NewString8(string(decoded[:8]))
-				// log.Print(aaa)
-				if err := png.Encode(outf, &rgba); err != nil {
-					log.Print(err)
-				}
-				// img, t, err := image.Decode(bytes.NewBuffer(d))
-				// log.Printf("%+v, %v, %v", img, t, err)
-				// _, err = io.Copy(outf, bytes.NewBuffer(d))
-				// if err != nil {
-				// log.Print(err.Error())
-				// }
 			}
-			// a := uint32(0)
-
-			// /*
-			// migic := helper.String4{}
-			// if err := binary.Read(d, binary.LittleEndian, &migic); err != nil {
-			// 	return err
-			// }
-
-			// rawLen := uint32(0)
-			// if err := binary.Read(d, binary.LittleEndian, &rawLen); err != nil {
-			// 	return err
-			// }
-			// log.Printf("%+v %+v", v3, l)
-			// */
-
-			// l := d.Bytes()
-			// log.Printf("byte length: %v", len(l))
-			// }
-			log.Printf("%+v %+v", p, a)
-			// TODO: to image.Image
+			cb.Image = img
+			stop := loop(cb)
+			if stop {
+				return nil
+			}
 		case string([]byte{0, 0, 0, 0}):
 			switch c.Csimetadata.Layout {
 			case kRenditionLayoutType_Color:
@@ -341,13 +282,25 @@ func (a *asset) Renditions() error {
 			return fmt.Errorf("unknown rendition with pixel format: %v", c.PixelFormat.String())
 		}
 
-		// log.Printf("%+v", c)
-		log.Print("")
-		log.Print("")
-		log.Print("")
 		return nil
 	}); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (a *asset) ImageWalke(func(name string, img image.Image) (end bool)) error {
+	c, err := a.FacetKeys()
+	if err != nil {
+		return err
+	}
+	for k, v := range c {
+		log.Printf("%v: %v", k, v)
+	}
+	return nil
+}
+
+func (a *asset) GetImage(nam string) (image.Image, error) {
+
+	return nil, nil
 }

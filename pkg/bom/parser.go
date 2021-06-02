@@ -9,6 +9,7 @@ import (
 	"log"
 
 	"github.com/iineva/bom/pkg/helper"
+	"github.com/iineva/bom/pkg/reader"
 )
 
 type BomParser interface {
@@ -19,10 +20,10 @@ type BomParser interface {
 	BlockNames() []string
 
 	// read named block
-	ReadBlock(name string) ([]byte, error)
+	ReadBlock(name string) (io.Reader, error)
 
 	// read named tree block
-	ReadTree(name string, entry func(k *bytes.Buffer, d *bytes.Buffer) error) error
+	ReadTree(name string, entry func(k io.Reader, d io.Reader) error) error
 }
 
 type bom struct {
@@ -36,8 +37,9 @@ type bom struct {
 var _ BomParser = (*bom)(nil)
 
 var (
-	ErrBlockLengthZero = errors.New("block length is zero")
-	ErrNameNotMatch    = errors.New("name not match")
+	// ErrBlockLengthZero = errors.New("block length is zero")
+	ErrBlockNotFound = errors.New("block not found")
+	ErrNameNotMatch  = errors.New("name not match")
 )
 
 func New(r io.ReadSeeker) BomParser {
@@ -107,18 +109,18 @@ func (b *bom) Parse() error {
 }
 
 // Block: get block with name
-func (b *bom) ReadBlock(name string) ([]byte, error) {
+func (b *bom) ReadBlock(name string) (io.Reader, error) {
 	for _, v := range b.vars {
 
 		if v.Name != name {
 			continue
 		}
 
-		b, err := b.readBlock(v.Index)
+		b, err := b.blockReader(v.Index)
 		if err != nil {
 			return nil, err
 		}
-		return b.Bytes(), nil
+		return b, nil
 	}
 	return nil, ErrNameNotMatch
 }
@@ -131,30 +133,23 @@ func (b *bom) BlockNames() []string {
 	return names
 }
 
-func (b *bom) readBlock(index uint32) (*bytes.Buffer, error) {
+func (b *bom) blockReader(index uint32) (io.Reader, error) {
+	if index >= uint32(len(b.blockTable.BlockPointers)) {
+		return nil, ErrBlockNotFound
+	}
 	p := b.blockTable.BlockPointers[index]
-	if _, err := b.r.Seek(int64(p.Address), 0); err != nil {
-		return nil, err
-	}
-
-	if p.Length == 0 {
-		return nil, ErrBlockLengthZero
-	}
-
-	buf := &bytes.Buffer{}
-	io.CopyN(buf, b.r, int64(p.Length))
-	return buf, nil
+	return reader.New(b.r, int64(p.Address), int64(p.Length)), nil
 }
 
 // Block: get tree block with name
-func (b *bom) ReadTree(name string, loop func(k *bytes.Buffer, d *bytes.Buffer) error) error {
+func (b *bom) ReadTree(name string, loop func(k io.Reader, d io.Reader) error) error {
 	for _, v := range b.vars {
 
 		if v.Name != name {
 			continue
 		}
 
-		entryBuf, err := b.readBlock(v.Index)
+		entryBuf, err := b.blockReader(v.Index)
 		if err != nil {
 			return err
 		}
@@ -163,16 +158,21 @@ func (b *bom) ReadTree(name string, loop func(k *bytes.Buffer, d *bytes.Buffer) 
 			return err
 		}
 
-		buf, err := b.readBlock(entry.Index)
+		tree, buf, err := b.readTree(entry.Index)
 		if err != nil {
 			return err
 		}
+		for tree.IsLeaf == 0 {
+			pi := TreeIndex{}
+			if err := binary.Read(buf, binary.BigEndian, &pi); err != nil {
+				return err
+			}
+			tree, buf, err = b.readTree(pi.ValueIndex)
+			if err != nil {
+				return err
+			}
+		}
 
-		tree := &Tree{}
-		binary.Read(buf, binary.BigEndian, &tree.IsLeaf)
-		binary.Read(buf, binary.BigEndian, &tree.Count)
-		binary.Read(buf, binary.BigEndian, &tree.Forward)
-		binary.Read(buf, binary.BigEndian, &tree.Backward)
 		tree.List = make([]TreeIndex, tree.Count)
 		for i := uint16(0); i < tree.Count; i++ {
 			pi := TreeIndex{}
@@ -180,13 +180,20 @@ func (b *bom) ReadTree(name string, loop func(k *bytes.Buffer, d *bytes.Buffer) 
 			tree.List[i] = pi
 
 			// get key and data
-			kbuf, err := b.readBlock(pi.KeyIndex)
+			kbuf, err := b.blockReader(pi.KeyIndex)
 			if err != nil {
-				return err
+				// why? not found i don't know, temporary handle
+				if err == ErrBlockNotFound {
+					p := make([]byte, 4)
+					binary.BigEndian.PutUint32(p, pi.KeyIndex)
+					kbuf = bytes.NewBuffer(p)
+				} else {
+					return err
+				}
 			}
-			vbuf, err := b.readBlock(pi.ValueIndex)
+			vbuf, err := b.blockReader(pi.ValueIndex)
 			if err != nil {
-				return err
+				// return err
 			}
 			// loop callback entry
 			if err := loop(kbuf, vbuf); err != nil {
@@ -197,4 +204,18 @@ func (b *bom) ReadTree(name string, loop func(k *bytes.Buffer, d *bytes.Buffer) 
 	}
 
 	return ErrNameNotMatch
+}
+
+func (b *bom) readTree(index uint32) (*Tree, io.Reader, error) {
+	buf, err := b.blockReader(index)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tree := &Tree{}
+	binary.Read(buf, binary.BigEndian, &tree.IsLeaf)
+	binary.Read(buf, binary.BigEndian, &tree.Count)
+	binary.Read(buf, binary.BigEndian, &tree.Forward)
+	binary.Read(buf, binary.BigEndian, &tree.Backward)
+	return tree, buf, nil
 }

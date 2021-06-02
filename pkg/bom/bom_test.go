@@ -3,6 +3,7 @@ package bom
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
@@ -43,7 +44,11 @@ func TestParser(t *testing.T) {
 	}
 
 	for k, v := range testBlockMap {
-		d, err := b.ReadBlock(k)
+		r, err := b.ReadBlock(k)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d, err := ioutil.ReadAll(r)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -54,8 +59,12 @@ func TestParser(t *testing.T) {
 
 	keys := []string{}
 	tkeys := []string{"AppIcon", "test", "test2", "test3"}
-	if err := b.ReadTree("FACETKEYS", func(k *bytes.Buffer, d *bytes.Buffer) error {
-		keys = append(keys, k.String())
+	if err := b.ReadTree("FACETKEYS", func(k io.Reader, d io.Reader) error {
+		b, err := ioutil.ReadAll(k)
+		if err != nil {
+			return err
+		}
+		keys = append(keys, string(b))
 		return nil
 	}); err != nil {
 		t.Fatal(err)

@@ -1,6 +1,9 @@
 package asset
 
 import (
+	"fmt"
+	"image/png"
+	"log"
 	"os"
 	"reflect"
 	"testing"
@@ -24,8 +27,26 @@ func TestAsset(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// name: BITMAPKEYS
+	if err := b.BitmapKeys(); err != nil {
+		t.Fatal(err)
+	}
+
 	// name: 'RENDITIONS'
-	if err := b.Renditions(); err != nil {
+	ri := 0
+	if err := b.Renditions(func(cb *RenditionCallback) (stop bool) {
+		if cb.Type == RenditionTypeImage && cb.Err == nil {
+			fileName := fmt.Sprintf("%v-%v", ri, cb.Name)
+			outf, _ := os.Create(fileName)
+			defer outf.Close()
+			if err := png.Encode(outf, cb.Image); err != nil {
+				log.Print(err)
+			}
+		}
+		log.Printf("%+v", cb)
+		ri++
+		return false
+	}); err != nil {
 		t.Fatal(err)
 	}
 

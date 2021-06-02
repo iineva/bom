@@ -18,7 +18,7 @@ type csiheader struct {
 	// uint32_t height;
 	Height uint32
 	// uint32_t scaleFactor;
-	ScaleFactor uint32
+	ScaleFactor uint32 // 100 to @1x, 200 to @2x, 300 to @3x
 	// uint32_t pixelFormat;
 	PixelFormat helper.String4
 	// type struct {
@@ -188,6 +188,7 @@ type CUIThemePixelRendition struct {
 	RawData []byte
 }
 
+// TODO:
 type CUIThemePixelRenditionV3 struct {
 	// uint32_t tag;					// 'CELM'
 	// Tag helper.String4
@@ -203,7 +204,8 @@ type CUIThemePixelRenditionV3 struct {
 	Arg3          uint32
 	Arg4          uint32
 	Height        uint32
-	Arg5          uint16
+	Arg5          uint8
+	Arg55         uint8
 	Arg6          uint16
 
 	// uint8_t rawData[];
