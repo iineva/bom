@@ -1,6 +1,8 @@
 package asset
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"io/ioutil"
 
 	"github.com/blacktop/go-lzfse"
+	"github.com/iineva/bom/pkg/mreader"
 )
 
 // BGRA to RGBA
@@ -71,58 +74,77 @@ func (a *asset) decodeImage(format string, d io.Reader, c *csiheader) (image.Ima
 	if err := binary.Read(d, binary.LittleEndian, &p.CompressionType); err != nil {
 		return nil, err
 	}
+	if err := binary.Read(d, binary.LittleEndian, &p.RawDataLength); err != nil {
+		return nil, err
+	}
 
-	var rawData []byte
-	var err error
-
-	width := c.Width
-	height := c.Height
-
-	// f := c.PixelFormat.String()
-	// n := c.Csimetadata.Name.String()
-	// log.Print(f, ",", n)
+	rawData := mreader.New()
 
 	// decode header
 	switch p.Version {
 	case 0, 2:
-		if err := binary.Read(d, binary.LittleEndian, &p.RawDataLength); err != nil {
+		buf := make([]byte, p.RawDataLength)
+		if _, err := d.Read(buf); err != nil {
 			return nil, err
 		}
-		p.RawData = make([]byte, p.RawDataLength)
-		if _, err := d.Read(p.RawData); err != nil {
-			return nil, err
-		}
-		rawData = p.RawData
-	case 1, 3: // maybe version 2
-		// NOTE: unknow this bolck, skip
-		// TODO: handle this block
-		v3 := CUIThemePixelRenditionV3{}
-		if err := binary.Read(d, binary.LittleEndian, &v3); err != nil {
-			return nil, err
-		}
-
-		height = v3.Height
-		rawData, err = ioutil.ReadAll(d)
+		r, err := umCompression(p.CompressionType, bytes.NewBuffer(buf))
 		if err != nil {
 			return nil, err
+		}
+		rawData.Add(r)
+	case 1, 3:
+		for i := 0; i < int(p.RawDataLength); i++ {
+			v3 := &CUIThemePixelRenditionV3{}
+			if err := binary.Read(d, binary.LittleEndian, v3); err != nil {
+				return nil, err
+			}
+			buf := make([]byte, v3.RowDataLen)
+			err := binary.Read(d, binary.LittleEndian, buf)
+			if err != nil {
+				return nil, err
+			}
+			r, err := umCompression(p.CompressionType, bytes.NewBuffer(buf))
+			if err != nil {
+				return nil, err
+			}
+			rawData.Add(r)
 		}
 	default:
 		return nil, fmt.Errorf("unsupport version: %v", p.Version)
 	}
 
+	defer rawData.Close()
+	return decodeImage(format, int(c.Width), int(c.Height), rawData)
+}
+
+func umCompression(t RenditionCompressionType, r io.Reader) (decoded io.ReadCloser, err error) {
 	// upcompression raw data
-	switch p.CompressionType {
+	switch t {
+	case kRenditionCompressionType_zip:
+		return gzip.NewReader(r)
 	case kRenditionCompressionType_lzfse:
-		rawData = lzfse.DecodeBuffer(rawData)
+		d, err := ioutil.ReadAll(r)
+		if err != nil {
+			return nil, err
+		}
+		decoded = io.NopCloser(bytes.NewBuffer(lzfse.DecodeBuffer(d)))
 	case kRenditionCompressionType_uncompressed:
-		// NOTE: do nothing
+		decoded = io.NopCloser(r)
+	// NOTE: do nothing
 	// TODO
 	// case kRenditionCompressionType_deepmap_2:
 	default:
-		return nil, fmt.Errorf("unsupport compression type: %v", p.CompressionType)
+		return nil, fmt.Errorf("unsupport compression type: %v", t)
 	}
+	return
+}
 
+func decodeImage(format string, width, height int, r io.Reader) (image.Image, error) {
 	offset := 0
+	rawData, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
 	switch format {
 	case "ARGB":
 		if v := len(rawData) - int(width*height*4); v != 0 {

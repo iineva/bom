@@ -13,11 +13,11 @@ import (
 
 func TestAsset(t *testing.T) {
 
-	const fileName = "../bom/test_data/YouTube.car"
+	// const fileName = "../bom/test_data/YouTube.car"
 	// const fileName = "../bom/test_data/Instagram.car"
 	// const fileName = "../bom/test_data/Twitter.car"
 	// const fileName = "../bom/test_data/YouTubeMusic.car"
-	// const fileName = "../bom/test_data/Assets.car"
+	const fileName = "../bom/test_data/Test.car"
 
 	f, err := os.Open(fileName)
 
@@ -39,7 +39,11 @@ func TestAsset(t *testing.T) {
 	// name: 'RENDITIONS'
 	ri := 0
 	if err := b.Renditions(func(cb *RenditionCallback) (stop bool) {
-		if cb.Type == RenditionTypeImage && cb.Err == nil {
+		if cb.Err != nil {
+			log.Print(cb.Err)
+			return false
+		}
+		if cb.Type == RenditionTypeImage {
 			os.MkdirAll("output", 0755)
 			fileName := fmt.Sprintf("output/%v-%v.png", ri, cb.Name)
 			outf, err := os.Create(fileName)

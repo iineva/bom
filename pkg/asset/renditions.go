@@ -184,31 +184,19 @@ type CUIThemePixelRendition struct {
 	CompressionType RenditionCompressionType
 	// uint32_t rawDataLength;
 	RawDataLength uint32
-	// uint8_t rawData[];
-	RawData []byte
+	// uint8_t rawData[]; // rawData or []CUIThemePixelRenditionV3
+	// RawData []byte
 }
 
 // TODO:
 type CUIThemePixelRenditionV3 struct {
-	// uint32_t tag;					// 'CELM'
-	// Tag helper.String4
-	// uint32_t version;
-	// Version uint32 // v == 3
-	// uint32_t compressionType;
-	// CompressionType RenditionCompressionType
-
-	// uint32_t rawDataLength;
-	RawDataLength uint32
-	Arg1          uint16
-	Arg2          uint16
-	Arg3          uint32
-	Arg4          uint32
-	Height        uint32
-	Arg5          uint8
-	Arg55         uint8
-	Arg6          uint16
-
-	// uint8_t rawData[];
+	Arg1       uint16
+	Arg2       uint16
+	Arg3       uint32
+	Arg4       uint32
+	Height     uint32
+	RowDataLen uint16
+	Arg6       uint16
 }
 
 // As seen in _CUIConvertCompressionTypeToString
