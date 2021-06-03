@@ -2,11 +2,11 @@
 
 Apple iOS / macOS Assets.car decoder, write in golang
 
-BOM - Bill of Materials
-Assets.car - Asset Catalog
+* BOM: Bill of Materials
+* Asset Catalog: Assets.car, and It's a BOM file with special block
 
 
-* Decode bom file
+### Decode bom file
 
 ```golang
 import "github.com/iineva/bom/pkg/bom"
@@ -27,7 +27,7 @@ err := b.ReadTree("FACETKEYS", func(k io.Reader, d io.Reader) error {
 })
 ```
 
-* Decode Asset Catalog
+### Decode Asset Catalog
 
 ```golang
 import "github.com/iineva/bom/pkg/asset"
@@ -40,6 +40,14 @@ b, _ := asset.NewWithReadSeeker(f)
 img, err := b.Image("AppIcon")
 ```
 
+### Requirements
+
+* install [lzfse](https://github.com/lzfse/lzfse)
+
+```shell
+# macOS
+brew install lzfse
+```
 
 # Reference
 
