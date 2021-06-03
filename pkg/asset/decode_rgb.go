@@ -11,7 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/blacktop/go-lzfse"
+	lzfse "github.com/blacktop/go-lzfse"
 	"github.com/iineva/bom/pkg/mreader"
 )
 
