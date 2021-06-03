@@ -2,6 +2,7 @@ package asset
 
 import (
 	"fmt"
+	"image"
 	"image/png"
 	"log"
 	"os"
@@ -12,12 +13,19 @@ import (
 )
 
 func TestAsset(t *testing.T) {
+	fileNames := []string{
+		"../bom/test_data/Assets.Car", "AppIcon",
+		// "test_data/YouTube.car", "AppIcon",
+		// "test_data/Instagram.car", "AppIcon",
+		// "test_data/Twitter.car", "ProductionAppIcon",
+		// "test_data/YouTubeMusic.car", "LaunchIcon",
+	}
+	for i := 0; i < len(fileNames)-1; i += 2 {
+		decodeFile(fileNames[i], fileNames[i+1], t)
+	}
+}
 
-	// const fileName = "../bom/test_data/YouTube.car"
-	// const fileName = "../bom/test_data/Instagram.car"
-	// const fileName = "../bom/test_data/Twitter.car"
-	// const fileName = "../bom/test_data/YouTubeMusic.car"
-	const fileName = "../bom/test_data/Test.car"
+func decodeFile(fileName, imageName string, t *testing.T) {
 
 	f, err := os.Open(fileName)
 
@@ -31,16 +39,25 @@ func TestAsset(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// name: BITMAPKEYS
-	if err := b.BitmapKeys(); err != nil {
+	if err := b.ImageWalker(func(name string, img image.Image) (end bool) {
+		log.Printf("%v: %v", name, img.Bounds())
+		return false
+	}); err != nil {
 		t.Fatal(err)
+	}
+
+	img, err := b.Image(imageName)
+	if err != nil {
+		t.Fatal(err)
+	} else {
+		log.Printf("b.Image('AppIcon'): %v", img.Bounds())
 	}
 
 	// name: 'RENDITIONS'
 	ri := 0
 	if err := b.Renditions(func(cb *RenditionCallback) (stop bool) {
 		if cb.Err != nil {
-			log.Print(cb.Err)
+			// log.Print(cb.Err)
 			return false
 		}
 		if cb.Type == RenditionTypeImage {
@@ -55,13 +72,27 @@ func TestAsset(t *testing.T) {
 				log.Print(err)
 			}
 		}
-		log.Printf("%+v", cb)
 		ri++
 		return false
 	}); err != nil {
 		t.Fatal(err)
 	}
-	return
+}
+
+func TestAssetBom(t *testing.T) {
+
+	const fileName = "../bom/test_data/Assets.car"
+	f, err := os.Open(fileName)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	b, err := NewWithReadSeeker(f)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// name: 'CARHEADER'
 	c, err := b.CarHeader()
@@ -131,7 +162,7 @@ func TestAsset(t *testing.T) {
 	if c, err := b.FacetKeys(); err != nil {
 		t.Fatal(err)
 	} else {
-		tc := map[string]map[RenditionAttributeType]uint16hex{
+		tc := map[string]RenditionAttrs{
 			"AppIcon": {
 				kRenditionAttributeType_Element:    0x0055,
 				kRenditionAttributeType_Part:       0x00DC,
@@ -160,5 +191,8 @@ func TestAsset(t *testing.T) {
 
 	// TODO:
 	// name: 'BITMAPKEYS'
+	// if err := b.BitmapKeys(); err != nil {
+	// 	t.Fatal(err)
+	// }
 
 }

@@ -225,7 +225,7 @@ func (a *asset) Renditions(loop func(cb *RenditionCallback) (stop bool)) error {
 			return err
 		}
 
-		log.Printf("%s: %s: %s attrs: %+v TVL: %+v %v", c.Tag.String(), c.PixelFormat.String(), c.Csimetadata.Name.String(), attrs, c, len(tmp))
+		// log.Printf("%s: %s: %s attrs: %+v TVL: %+v %v", c.Tag.String(), c.PixelFormat.String(), c.Csimetadata.Name.String(), attrs, c, len(tmp))
 		// string value reverse
 		format := strings.TrimSpace(string(helper.Reverse(c.PixelFormat[:])))
 		switch format {
@@ -264,22 +264,9 @@ func (a *asset) Renditions(loop func(cb *RenditionCallback) (stop bool)) error {
 				// _CUIThemeMultisizeImageSetRendition
 				// TODO:
 				p := CUIThemeMultisizeImageSetRendition{}
-				// l := d.Bytes()
-				// log.Print(l)
-				// return nil
 				if err := binary.Read(d, binary.LittleEndian, &p); err != nil {
 					return err
 				}
-				// if err := binary.Read(d, binary.LittleEndian, &p.Version); err != nil {
-				// 	return err
-				// }
-				// if err := binary.Read(d, binary.LittleEndian, &p.CompressionType); err != nil {
-				// 	return err
-				// }
-				// if err := binary.Read(d, binary.LittleEndian, &p.RawDataLength); err != nil {
-				// 	return err
-				// }
-				log.Printf("%+v", p)
 			}
 		default:
 			return fmt.Errorf("unknown rendition with pixel format: %v", c.PixelFormat.String())
@@ -292,18 +279,57 @@ func (a *asset) Renditions(loop func(cb *RenditionCallback) (stop bool)) error {
 	return nil
 }
 
-func (a *asset) ImageWalke(func(name string, img image.Image) (end bool)) error {
+func (a *asset) ImageWalker(loop func(name string, img image.Image) (end bool)) error {
 	c, err := a.FacetKeys()
 	if err != nil {
 		return err
 	}
-	for k, v := range c {
-		log.Printf("%v: %v", k, v)
+	type item struct {
+		name  string
+		attrs RenditionAttrs
+		done  bool
 	}
-	return nil
+	idMap := map[uint16hex]*item{}
+	for k, v := range c {
+		id, ok := v[kRenditionAttributeType_Identifier]
+		if !ok {
+			continue
+		}
+		idMap[id] = &item{name: k, attrs: v}
+	}
+	return a.Renditions(func(cb *RenditionCallback) (stop bool) {
+		if cb.Err != nil {
+			return false
+		}
+		if cb.Type != RenditionTypeImage {
+			return false
+		}
+		id, ok := cb.Attrs[kRenditionAttributeType_Identifier]
+		if !ok {
+			return false
+		}
+
+		row, ok := idMap[id]
+		if !ok || row.done {
+			return false
+		}
+		row.done = true
+
+		return loop(row.name, cb.Image)
+	})
 }
 
-func (a *asset) GetImage(nam string) (image.Image, error) {
-
-	return nil, nil
+func (a *asset) Image(name string) (image.Image, error) {
+	var img image.Image
+	err := a.ImageWalker(func(n string, i image.Image) (end bool) {
+		if name == n {
+			img = i
+			return true
+		}
+		return false
+	})
+	if img == nil {
+		return nil, fmt.Errorf("not found: %v", name)
+	}
+	return img, err
 }
