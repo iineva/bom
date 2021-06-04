@@ -40,15 +40,6 @@ b, _ := asset.NewWithReadSeeker(f)
 img, err := b.Image("AppIcon")
 ```
 
-### Requirements
-
-* install [lzfse](https://github.com/lzfse/lzfse)
-
-```shell
-# macOS
-brew install lzfse
-```
-
 # Reference
 
 <https://blog.timac.org/2018/1018-reverse-engineering-the-car-file-format/>
@@ -56,3 +47,4 @@ brew install lzfse
 <https://github.com/hogliux/bomutils>
 <http://lingyuncxb.com/2019/04/14/HumbleAssetCatalog/>
 <https://github.com/lzfse/lzfse>
+<https://github.com/iineva/go-lzfse>
