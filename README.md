@@ -1,10 +1,11 @@
 # bom
 
-Apple iOS / macOS Assets.car decoder, write in golang
+Apple iOS / macOS Assets.car decoder, write in golang.
+
+[ipa-server](https://github.com/iineva/ipa-server) use this to decode app icons in `Assets.cart`
 
 * BOM: Bill of Materials
 * Asset Catalog: Assets.car, and It's a BOM file with special block
-
 
 ### Decode bom file
 
