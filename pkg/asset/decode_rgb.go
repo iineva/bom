@@ -11,8 +11,8 @@ import (
 	"io"
 	"io/ioutil"
 
+	lzfse "github.com/blacktop/lzfse-cgo"
 	"github.com/iineva/bom/pkg/mreader"
-	lzfse "github.com/iineva/go-lzfse"
 )
 
 // BGRA to RGBA

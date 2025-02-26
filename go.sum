@@ -1,2 +1,2 @@
-github.com/iineva/go-lzfse v1.1.13-0.20210604101847-2a555776c20a h1:c8iYO/eYhs1ec6n4oLzl7x0qt6o2ncMo5Tu4RqaTjNY=
-github.com/iineva/go-lzfse v1.1.13-0.20210604101847-2a555776c20a/go.mod h1:yysDM+nYHHoh/0FCrKiXZf1qSvZGJdLySbGZ3dKYOAo=
+github.com/blacktop/lzfse-cgo v1.1.20 h1:xlfMq7g1aaMCyWr8/hHqsWzvfaF8QaliU1YxDCfMx68=
+github.com/blacktop/lzfse-cgo v1.1.20/go.mod h1:VoBC8Nle73KZg/4X9NW94jkFrQkNwQ18SMMu5ev8zSA=
